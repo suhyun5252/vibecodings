@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>간단한 퍼즐 게임</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2f6fed;
+      --accent-dark: #2458c7;
+      --tile: #c7f5d4;
+      --tile-border: #a7e7bd;
+      --tile-open: #9fe6b2;
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top, #ffffff 0%, #eef3fb 48%, #e8eef8 100%);
+      color: var(--text);
+      font-family: "Arial", "Helvetica Neue", sans-serif;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 28px 22px 20px;
+      backdrop-filter: blur(4px);
+    }
+
+    .title {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 16px;
+      flex-wrap: wrap;
+    }
+
+    .attempts {
+      font-size: 16px;
+      font-weight: 700;
+      color: #202833;
+    }
+
+    .restart-btn {
+      border: none;
+      background: var(--accent);
+      color: white;
+      border-radius: 12px;
+      padding: 10px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(47, 111, 237, 0.24);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    .restart-btn:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .card {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border: 1px solid var(--tile-border);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #d4f8df, var(--tile));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      font-size: 32px;
+      cursor: pointer;
+      transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      background: linear-gradient(180deg, #cbf4d8, var(--tile-open));
+    }
+
+    .card.open,
+    .card.matched {
+      background: linear-gradient(180deg, #d5f7dd, #baf0c8);
+      box-shadow: inset 0 0 0 1px rgba(69, 164, 96, 0.12);
+      cursor: default;
+    }
+
+    .card span {
+      transform: translateY(1px);
+    }
+
+    .message {
+      margin: 18px 0 0;
+      text-align: center;
+      min-height: 26px;
+      font-weight: 700;
+      color: #202833;
+    }
+
+    .message.clear {
+      color: #1f7a46;
+    }
+
+    .hint {
+      margin-top: 10px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        padding: 22px 16px 18px;
+      }
+
+      .title h1 {
+        font-size: 24px;
+      }
+
+      .card {
+        font-size: 28px;
+        border-radius: 14px;
+      }
+
+      .topbar {
+        margin-top: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">
+      <h1>간단한 퍼즐 게임</h1>
+      <p class="subtitle">같은 그림 2개를 찾아 모두 맞추면 클리어입니다.</p>
+    </div>
+
+    <section class="topbar">
+      <div class="attempts">시도 횟수: <span id="attemptCount">0</span></div>
+      <button class="restart-btn" id="restartButton">다시 시작</button>
+    </section>
+
+    <section class="board" id="board" aria-label="퍼즐 보드"></section>
+
+    <p class="message" id="messageBox">카드를 두 장씩 열어서 같은 그림을 찾아보세요.</p>
+    <p class="hint">초보자용 예제: 클릭 이벤트, 상태 비교, 클리어 조건을 연습할 수 있어요.</p>
+  </main>
+
+  <script>
+    // 8쌍, 총 16장의 카드로 구성된 메모리 퍼즐입니다.
+    const SYMBOLS = ["🍇", "🍓", "🥝", "🍎", "🍉", "🍊", "🍒", "✨"];
+
+    const board = document.getElementById("board");
+    const attemptCount = document.getElementById("attemptCount");
+    const restartButton = document.getElementById("restartButton");
+    const messageBox = document.getElementById("messageBox");
+
+    let cards = [];
+    let firstCard = null;
+    let secondCard = null;
+    let canClick = true;
+    let attempts = 0;
+    let matchedCount = 0;
+
+    function createDeck() {
+      const deck = [...SYMBOLS, ...SYMBOLS];
+
+      // Fisher-Yates 셔플: 카드 순서를 무작위로 섞습니다.
+      for (let i = deck.length - 1; i > 0; i--) {
+        const randomIndex = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[randomIndex]] = [deck[randomIndex], deck[i]];
+      }
+
+      return deck;
+    }
+
+    function renderBoard() {
+      // 기존 보드를 지우고 새로 그릴 준비를 합니다.
+      board.innerHTML = "";
+
+      // cards 배열에 들어 있는 값들을 하나씩 꺼내서 카드 버튼으로 만듭니다.
+      cards.forEach((symbol, index) => {
+        // 카드 1장을 나타내는 버튼 요소를 생성합니다.
+        const button = document.createElement("button");
+
+        // form 안에서 오작동하지 않도록 일반 버튼으로 지정합니다.
+        button.type = "button";
+
+        // 카드 모양을 적용하기 위한 클래스입니다.
+        button.className = "card";
+
+        // 스크린리더가 읽을 수 있도록 카드라는 설명을 넣습니다.
+        button.setAttribute("aria-label", "카드");
+
+        // 카드의 위치를 나중에 찾을 수 있도록 저장합니다.
+        button.dataset.index = index;
+
+        // 카드가 어떤 그림인지 저장해 둡니다.
+        button.dataset.symbol = symbol;
+
+        // 처음에는 카드 뒷면만 보이도록 물음표를 보여줍니다.
+        button.innerHTML = "<span>❔</span>";
+
+        // 만든 카드를 보드에 붙입니다.
+        board.appendChild(button);
+      });
+    }
+
+    function resetGame() {
+      cards = createDeck();
+      firstCard = null;
+      secondCard = null;
+      canClick = true;
+      attempts = 0;
+      matchedCount = 0;
+      attemptCount.textContent = attempts;
+      messageBox.classList.remove("clear");
+      messageBox.textContent = "카드를 두 장씩 열어서 같은 그림을 찾아보세요.";
+      renderBoard();
+    }
+
+    function openCard(cardElement) {
+      cardElement.classList.add("open");
+      cardElement.innerHTML = `<span>${cardElement.dataset.symbol}</span>`;
+    }
+
+    function closeCard(cardElement) {
+      cardElement.classList.remove("open");
+      cardElement.innerHTML = "<span>❔</span>";
+    }
+
+    function markMatched(cardElement) {
+      cardElement.classList.add("matched");
+      cardElement.disabled = true;
+    }
+
+    function checkForMatch() {
+      if (!firstCard || !secondCard) return;
+
+      attempts += 1;
+      attemptCount.textContent = attempts;
+
+      const isMatch = firstCard.dataset.symbol === secondCard.dataset.symbol;
+
+      if (isMatch) {
+        markMatched(firstCard);
+        markMatched(secondCard);
+        matchedCount += 2;
+
+        firstCard = null;
+        secondCard = null;
+        canClick = true;
+
+        if (matchedCount === cards.length) {
+          messageBox.classList.add("clear");
+          messageBox.textContent = `축하합니다! ${attempts}번 만에 모두 맞췄습니다.`;
+        } else {
+          messageBox.classList.remove("clear");
+          messageBox.textContent = "잘 맞췄어요! 다음 짝을 찾아보세요.";
+        }
+      } else {
+        messageBox.classList.remove("clear");
+        messageBox.textContent = "다른 그림이네요. 다시 시도해보세요.";
+        canClick = false;
+        const first = firstCard;
+        const second = secondCard;
+
+        setTimeout(() => {
+          closeCard(first);
+          closeCard(second);
+          firstCard = null;
+          secondCard = null;
+          canClick = true;
+        }, 700);
+      }
+    }
+
+    board.addEventListener("click", function (event) {
+      const cardElement = event.target.closest(".card");
+
+      if (!cardElement || !canClick || cardElement.classList.contains("matched") || cardElement === firstCard) {
+        return;
+      }
+
+      openCard(cardElement);
+
+      if (!firstCard) {
+        firstCard = cardElement;
+        return;
+      }
+
+      secondCard = cardElement;
+      checkForMatch();
+    });
+
+    restartButton.addEventListener("click", resetGame);
+
+    resetGame();
+  </script>
+</body>
+</html>

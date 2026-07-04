@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>간단한 퍼즐 게임</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2f6fed;
+      --accent-dark: #2458c7;
+      --tile: #c7f5d4;
+      --tile-border: #a7e7bd;
+      --tile-open: #9fe6b2;
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top, #ffffff 0%, #eef3fb 48%, #e8eef8 100%);
+      color: var(--text);
+      font-family: "Arial", "Helvetica Neue", sans-serif;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 28px 22px 20px;
+      backdrop-filter: blur(4px);
+    }
+
+    .title {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 16px;
+      flex-wrap: wrap;
+    }
+
+    .attempts {
+      font-size: 16px;
+      font-weight: 700;
+      color: #202833;
+    }
+
+    .restart-btn {
+      border: none;
+      background: var(--accent);
+      color: white;
+      border-radius: 12px;
+      padding: 10px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(47, 111, 237, 0.24);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    .restart-btn:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .card {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border: 1px solid var(--tile-border);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #d4f8df, var(--tile));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      font-size: 32px;
+      cursor: pointer;
+      transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      background: linear-gradient(180deg, #cbf4d8, var(--tile-open));
+    }
+
+    .card.open,
+    .card.matched {
+      background: linear-gradient(180deg, #d5f7dd, #baf0c8);
+      box-shadow: inset 0 0 0 1px rgba(69, 164, 96, 0.12);
+      cursor: default;
+    }
+
+    .card span {
+      transform: translateY(1px);
+    }
+
+    .message {
+      margin: 18px 0 0;
+      text-align: center;
+      min-height: 26px;
+      font-weight: 700;
+      color: #202833;
+    }
+
+    .message.clear {
+      color: #1f7a46;
+    }
+
+    .hint {
+      margin-top: 10px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        padding: 22px 16px 18px;
+      }
+
+      .title h1 {
+        font-size: 24px;
+      }
+
+      .card {
+        font-size: 28px;
+        border-radius: 14px;
+      }
+
+      .topbar {
+        margin-top: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">
+      <h1>간단한 퍼즐 게임</h1>
+      <p class="subtitle">같은 그림 2개를 찾아 모두 맞추면 클리어입니다.</p>
+    </div>
+
+    <section class="topbar">
+      <div class="attempts">시도 횟수: <span id="attemptCount">0</span></div>
+      <button class="restart-btn" id="restartButton">다시 시작</button>
+    </section>
+
+    <section class="board" id="board" aria-label="퍼즐 보드"></section>
+
+    <p class="message" id="messageBox">카드를 두 장씩 열어서 같은 그림을 찾아보세요.</p>
+    <p class="hint">초보자용 예제: 클릭 이벤트, 상태 비교, 클리어 조건을 연습할 수 있어요.</p>
+  </main>
+
+  <script>
+    // 8쌍, 총 16장의 카드로 구성된 메모리 퍼즐입니다.
+    const symbol_list = ["🍇", "🍓", "🥝", "🍎", "🍉", "🍊", "🍒", "✨"];
+
+    const board_element = document.getElementById("board");
+    const attempt_count_element = document.getElementById("attemptCount");
+    const restart_button_element = document.getElementById("restartButton");
+    const message_box_element = document.getElementById("messageBox");
+
+    let cards = [];
+    let first_card_element = null;
+    let second_card_element = null;
+    let can_click = true;
+    let attempt_count = 0;
+    let matched_count = 0;
+
+    function create_deck() {
+      // 같은 그림을 2번씩 넣어서 짝이 있는 카드 묶음을 만듭니다.
+      const deck = [...symbol_list, ...symbol_list];
+
+      // Fisher-Yates 셔플로 카드 순서를 무작위로 섞습니다.
+      for (let index = deck.length - 1; index > 0; index -= 1) {
+        const random_index = Math.floor(Math.random() * (index + 1));
+        [deck[index], deck[random_index]] = [deck[random_index], deck[index]];
+      }
+
+      return deck;
+    }
+
+    function create_card_button(symbol, index) {
+      // 카드 1장을 나타내는 버튼 요소를 생성합니다.
+      const button_element = document.createElement("button");
+
+      // form 안에서 오작동하지 않도록 일반 버튼으로 지정합니다.
+      button_element.type = "button";
+      button_element.className = "card";
+      button_element.setAttribute("aria-label", "카드");
+
+      // 나중에 어떤 카드인지 찾을 수 있도록 정보도 함께 저장합니다.
+      button_element.dataset.index = index;
+      button_element.dataset.symbol = symbol;
+
+      // 처음에는 카드 뒷면만 보이도록 물음표를 보여줍니다.
+      button_element.innerHTML = "<span>❔</span>";
+
+      return button_element;
+    }
+
+    function render_board() {
+      // 기존 보드를 지우고 새로 그릴 준비를 합니다.
+      board_element.innerHTML = "";
+
+      // cards 배열에 들어 있는 값들을 하나씩 꺼내서 카드 버튼으로 만듭니다.
+      cards.forEach((symbol, index) => {
+        board_element.appendChild(create_card_button(symbol, index));
+      });
+    }
+
+    function update_attempt_count() {
+      attempt_count_element.textContent = String(attempt_count);
+    }
+
+    function set_message(text, is_clear = false) {
+      message_box_element.classList.toggle("clear", is_clear);
+      message_box_element.textContent = text;
+    }
+
+    function reset_turn() {
+      // 한 번의 턴이 끝나면 선택한 카드 정보와 클릭 가능 상태를 초기화합니다.
+      first_card_element = null;
+      second_card_element = null;
+      can_click = true;
+    }
+
+    function open_card(card_element) {
+      // 카드 앞면을 보여줍니다.
+      card_element.classList.add("open");
+      card_element.innerHTML = `<span>${card_element.dataset.symbol}</span>`;
+    }
+
+    function close_card(card_element) {
+      // 다시 뒷면으로 되돌립니다.
+      card_element.classList.remove("open");
+      card_element.innerHTML = "<span>❔</span>";
+    }
+
+    function mark_matched_card(card_element) {
+      // 맞춘 카드는 더 이상 클릭하지 못하게 막습니다.
+      card_element.classList.add("matched");
+      card_element.disabled = true;
+    }
+
+    function handle_matched_pair() {
+      // 같은 그림을 찾았을 때 실행됩니다.
+      mark_matched_card(first_card_element);
+      mark_matched_card(second_card_element);
+      matched_count += 2;
+      reset_turn();
+
+      if (matched_count === cards.length) {
+        // 모든 카드를 맞추면 클리어 메시지를 보여줍니다.
+        set_message(`축하합니다! ${attempt_count}번 만에 모두 맞췄습니다.`, true);
+        return;
+      }
+
+      set_message("잘 맞췄어요! 다음 짝을 찾아보세요.");
+    }
+
+    function handle_mismatched_pair() {
+      // 다른 그림이 선택되면 잠깐 보여준 뒤 다시 뒤집습니다.
+      set_message("다른 그림이네요. 다시 시도해보세요.");
+      can_click = false;
+
+      const first_selected_card = first_card_element;
+      const second_selected_card = second_card_element;
+
+      setTimeout(() => {
+        close_card(first_selected_card);
+        close_card(second_selected_card);
+        reset_turn();
+      }, 700);
+    }
+
+    function compare_selected_cards() {
+      // 카드 2장을 아직 다 고르지 않았다면 비교할 수 없습니다.
+      if (!first_card_element || !second_card_element) {
+        return;
+      }
+
+      // 한 번 시도할 때마다 횟수를 1 증가시킵니다.
+      attempt_count += 1;
+      update_attempt_count();
+
+      // 두 카드의 그림이 같은지 확인합니다.
+      const is_match = first_card_element.dataset.symbol === second_card_element.dataset.symbol;
+
+      if (is_match) {
+        handle_matched_pair();
+        return;
+      }
+
+      handle_mismatched_pair();
+    }
+
+    function handle_board_click(event) {
+      // 실제로 클릭한 요소가 카드인지 확인합니다.
+      const card_element = event.target.closest(".card");
+
+      // 카드가 아니거나, 이미 처리된 카드이거나,
+      // 뒤집기 동작 중이면 아무것도 하지 않습니다.
+      if (!card_element || !can_click || card_element.classList.contains("matched") || card_element === first_card_element) {
+        return;
+      }
+
+      // 클릭한 카드를 앞면으로 보여줍니다.
+      open_card(card_element);
+
+      if (!first_card_element) {
+        // 첫 번째로 선택한 카드라면 기억만 해둡니다.
+        first_card_element = card_element;
+        return;
+      }
+
+      // 두 번째 카드가 선택되면 짝 비교를 시작합니다.
+      second_card_element = card_element;
+      compare_selected_cards();
+    }
+
+    function handle_restart_click() {
+      reset_game();
+    }
+
+    function reset_game() {
+      // 게임 시작 또는 재시작 때 호출됩니다.
+      cards = create_deck();
+      attempt_count = 0;
+      matched_count = 0;
+      reset_turn();
+      update_attempt_count();
+
+      // 안내 문구를 초기 상태로 되돌립니다.
+      set_message("카드를 두 장씩 열어서 같은 그림을 찾아보세요.");
+      render_board();
+    }
+
+    board_element.addEventListener("click", handle_board_click);
+    restart_button_element.addEventListener("click", handle_restart_click);
+
+    reset_game();
+  </script>
+</body>
+</html>
